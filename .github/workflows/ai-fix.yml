@@ -49,11 +49,19 @@ jobs:
           REPO_NAME: ${{ github.repository }}
         run: node .github/scripts/ai-fix.js
 
+      - name: Generate GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.AI_FIXER_APP_ID }}
+          private-key: ${{ secrets.AI_FIXER_APP_PRIVATE_KEY }}
+
       - name: Create Pull Request
         id: cpr
         if: steps.ai_fix.outputs.changes_made == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
+          token: ${{ steps.app_token.outputs.token }}
           commit-message: "fix: AI-generated fix for issue #${{ github.event.issue.number }}"
           title: "🤖 AI Fix: ${{ github.event.issue.title }}"
           body: |
