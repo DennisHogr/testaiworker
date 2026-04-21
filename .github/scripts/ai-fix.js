@@ -211,6 +211,8 @@ Remember: ONLY output valid JSON. No additional text.`;
     temperature: 0.2,
   };
 
+  console.log("payload", payload);
+  console.log("LANGDOCK_BASE_URL", LANGDOCK_BASE_URL);
   return new Promise((resolve, reject) => {
     const apiUrl = new URL(`${LANGDOCK_BASE_URL}/chat/completions`);
 
