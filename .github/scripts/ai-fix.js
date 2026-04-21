@@ -211,8 +211,6 @@ Remember: ONLY output valid JSON. No additional text.`;
     temperature: 0.2,
   };
 
-  console.log("payload", payload);
-  console.log("LANGDOCK_BASE_URL", LANGDOCK_BASE_URL);
   return new Promise((resolve, reject) => {
     const apiUrl = new URL(`${LANGDOCK_BASE_URL}/chat/completions`);
 
@@ -276,8 +274,16 @@ Remember: ONLY output valid JSON. No additional text.`;
  * Validate that an edit is safe to apply
  */
 function validateEdit(edit) {
+  if (!edit || typeof edit !== 'object') {
+    throw new Error(`❌ Edit is not an object: ${JSON.stringify(edit)}`);
+  }
+
   if (!edit.path || !edit.search || !edit.replace) {
-    throw new Error('Edit missing required fields: path, search, replace');
+    const missing = [];
+    if (!edit.path) missing.push('path');
+    if (!edit.search) missing.push('search');
+    if (!edit.replace) missing.push('replace');
+    throw new Error(`❌ Edit missing required fields (${missing.join(', ')}). Edit object: ${JSON.stringify(edit)}`);
   }
 
   // Normalize path
@@ -365,9 +371,15 @@ async function main() {
     console.log('🤖 Calling Langdock API...');
     const fixResult = await callLangdockAPI(repositoryFiles);
 
+    console.log(`\n📦 API Response received:`);
+    console.log(`   can_fix: ${fixResult.can_fix}`);
+    console.log(`   summary: ${fixResult.summary || '(none)'}`);
+    console.log(`   edits: ${fixResult.edits ? fixResult.edits.length + ' edits' : 'none'}`);
+    if (fixResult.reason) console.log(`   reason: ${fixResult.reason}`);
+
     // Handle API response
     if (!fixResult.can_fix) {
-      console.log(`⚠️  Cannot apply fix: ${fixResult.reason}`);
+      console.log(`\n⚠️  Cannot apply fix: ${fixResult.reason}`);
       console.log('::set-output name=changes_made::false');
       console.log(`::set-output name=reason::${fixResult.reason}`);
       process.exit(0);
@@ -384,12 +396,19 @@ async function main() {
     console.log(`\n🔧 Applying ${fixResult.edits.length} edit(s)...`);
     const appliedFiles = [];
 
-    for (const edit of fixResult.edits) {
+    for (let i = 0; i < fixResult.edits.length; i++) {
+      const edit = fixResult.edits[i];
       try {
+        console.log(`  [${i + 1}/${fixResult.edits.length}] Processing edit for: ${edit.path || '(unknown path)'}`);
         applyEdit(edit);
         appliedFiles.push(edit.path);
       } catch (err) {
-        console.error(`Error applying edit to ${edit.path}: ${err.message}`);
+        console.error(`\n❌ Error applying edit #${i + 1}:`);
+        console.error(`   Path: ${edit.path || 'undefined'}`);
+        console.error(`   Has search: ${!!edit.search}`);
+        console.error(`   Has replace: ${!!edit.replace}`);
+        console.error(`   Full edit object: ${JSON.stringify(edit, null, 2)}`);
+        console.error(`   Error: ${err.message}`);
         process.exit(1);
       }
     }
