@@ -201,7 +201,7 @@ If you cannot safely fix the issue:
 Remember: ONLY output valid JSON. No additional text.`;
 
   const payload = {
-    model: 'langdock',
+    model: 'gpt-5.4',
     messages: [
       {
         role: 'user',
@@ -212,7 +212,7 @@ Remember: ONLY output valid JSON. No additional text.`;
   };
 
   return new Promise((resolve, reject) => {
-    const apiUrl = new URL(`${LANGDOCK_BASE_URL}/v1/chat/completions`);
+    const apiUrl = new URL(`${LANGDOCK_BASE_URL}/chat/completions`);
 
     const options = {
       hostname: apiUrl.hostname,
