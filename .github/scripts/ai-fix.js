@@ -365,6 +365,14 @@ function validateEdit(edit) {
 }
 
 /**
+ * Normalize whitespace for comparison (handles CRLF vs LF and trailing spaces)
+ */
+function normalizeWhitespace(text) {
+  // Normalize line endings to LF
+  return text.replace(/\r\n/g, '\n');
+}
+
+/**
  * Apply an edit to a file
  */
 function applyEdit(edit) {
@@ -388,28 +396,71 @@ function applyEdit(edit) {
     throw new Error(`❌ Could not read file ${filePath}: ${err.message}`);
   }
 
-  // Check that search text exists exactly once
-  const occurrences = (content.match(new RegExp(edit.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-  if (occurrences === 0) {
-    throw new Error(`❌ Search text not found in ${filePath}. The search text provided does not match any content in the file. This usually means:
+  // Try to find and replace the text with multiple strategies to handle whitespace differences
+  let searchText = edit.search;
+  let replaceText = edit.replace;
+  let newContent = null;
+
+  // Strategy 1: Direct string replacement
+  if (content.includes(searchText)) {
+    newContent = content.replace(searchText, replaceText);
+  }
+
+  // Strategy 2: Normalize line endings (CRLF -> LF)
+  if (!newContent) {
+    const normalizedContent = normalizeWhitespace(content);
+    const normalizedSearchText = normalizeWhitespace(searchText);
+    const normalizedReplaceText = normalizeWhitespace(replaceText);
+
+    if (normalizedContent.includes(normalizedSearchText)) {
+      newContent = normalizedContent.replace(normalizedSearchText, normalizedReplaceText);
+    }
+  }
+
+  // Strategy 3: Try with normalized search text on original content
+  if (!newContent) {
+    const normalizedSearchText = normalizeWhitespace(searchText);
+    const normalizedReplaceText = normalizeWhitespace(replaceText);
+
+    const escapedSearchText = normalizedSearchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escapedSearchText, 'g');
+    const occurrences = (content.match(regex) || []).length;
+
+    if (occurrences === 1) {
+      newContent = content.replace(regex, replaceText);
+    }
+  }
+
+  // If still not found, provide detailed error
+  if (!newContent) {
+    // Check how many times it would match with various normalizations
+    const normalizedContent = normalizeWhitespace(content);
+    const normalizedSearchText = normalizeWhitespace(searchText);
+    const escapedSearchText = normalizedSearchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escapedSearchText, 'g');
+    const occurrences = (normalizedContent.match(regex) || []).length;
+
+    if (occurrences === 0) {
+      throw new Error(`❌ Search text not found in ${filePath}. The search text provided does not match any content in the file. This usually means:
     1. The search text is incomplete or missing context
     2. The file content changed since the issue was created
     3. The file uses different whitespace (tabs vs spaces, line endings)
 
-    Search text to find: ${JSON.stringify(edit.search)}`);
-  }
-  if (occurrences > 1) {
-    throw new Error(`❌ Search text is ambiguous (${occurrences} matches) in ${filePath}. The search text appears multiple times in the file. This usually means:
+    Search text to find: ${JSON.stringify(edit.search)}
+
+    File length: ${content.length} characters
+    Search text length: ${searchText.length} characters`);
+    }
+    if (occurrences > 1) {
+      throw new Error(`❌ Search text is ambiguous (${occurrences} matches) in ${filePath}. The search text appears multiple times in the file. This usually means:
     1. The search text is too generic or too short
     2. Not enough surrounding context was included
     3. The search text needs to include more unique identifiers
 
     Try making the search text more specific with additional context.
     Search text provided: ${JSON.stringify(edit.search)}`);
+    }
   }
-
-  // Apply the replacement
-  const newContent = content.replace(edit.search, edit.replace);
 
   // Write the file
   try {
