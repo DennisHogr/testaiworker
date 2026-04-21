@@ -137,6 +137,18 @@ function collectRepositoryFiles(maxTotalSize = 100 * 1024) {
   visitDir(process.cwd());
 
   console.log(`📦 Collected ${Object.keys(files).length} files (${Math.round(totalSize / 1024)}KB)`);
+
+  // Log which files were collected for debugging
+  const fileList = Object.keys(files)
+    .sort()
+    .slice(0, 15); // Show first 15 files
+  console.log(`\n📄 Files included in context:`);
+  fileList.forEach(f => console.log(`   • ${f}`));
+  if (Object.keys(files).length > 15) {
+    console.log(`   ... and ${Object.keys(files).length - 15} more`);
+  }
+  console.log('');
+
   return files;
 }
 
@@ -144,9 +156,27 @@ function collectRepositoryFiles(maxTotalSize = 100 * 1024) {
  * Call the Langdock API to generate a fix
  */
 async function callLangdockAPI(repositoryFiles) {
-  // Format repository context
+  // Create a manifest of files (with brief previews for CSS/HTML files)
+  const fileManifest = Object.entries(repositoryFiles)
+    .map(([filePath, content]) => {
+      const ext = filePath.split('.').pop();
+      const lines = content.split('\n').length;
+      const preview = ext === 'css' || ext === 'html' || ext === 'ts'
+        ? ` (${lines} lines)`
+        : '';
+      return `- ${filePath}${preview}`;
+    })
+    .join('\n');
+
+  // Format repository context with better organization
   const filesContext = Object.entries(repositoryFiles)
-    .map(([path, content]) => `## ${path}\n\`\`\`\n${content}\n\`\`\``)
+    .map(([filePath, content]) => {
+      const ext = filePath.split('.').pop();
+      return `### File: ${filePath}
+\`\`\`${ext === 'css' ? 'css' : ext === 'html' ? 'html' : ext === 'ts' ? 'typescript' : 'text'}
+${content}
+\`\`\``;
+    })
     .join('\n\n');
 
   const prompt = `You are a code fixing assistant. A GitHub issue has been reported in this repository.
@@ -157,42 +187,48 @@ async function callLangdockAPI(repositoryFiles) {
 **Description:**
 ${ISSUE_BODY}
 
-## Repository Context
+## Repository Files Available
+${fileManifest}
+
+## Repository Context (Full File Contents)
 ${filesContext}
 
 ## Your Task
 Analyze the issue and provide a minimal, safe code fix. Your fix should:
 1. Address the reported problem with the smallest possible change
-2. Not modify workflow files, environment files, or infrastructure
-3. Include only source code changes
+2. Only modify application source code (CSS, HTML, JS, TS files)
+3. Not modify workflow files, environment files, or infrastructure
 4. Be testable and self-contained
 
-## CRITICAL: Search Text Requirements
+## CRITICAL REQUIREMENTS FOR SEARCH TEXT
 
 IMPORTANT: The "search" field in each edit MUST:
-1. Be EXACT: Match the exact text in the file (character-for-character, including all whitespace)
-2. Be SPECIFIC: Include enough surrounding context to appear exactly ONCE in the file
-3. Be UNAMBIGUOUS: Never use generic patterns like just newlines or single characters
-4. Include CONTEXT: Include lines before/after to make it unique
-5. Be COMPLETE: Include all whitespace exactly (spaces, tabs, newlines)
+1. **EXACT MATCH**: Use the EXACT text from the file, character-for-character
+2. **PRESERVE WHITESPACE**: Match indentation exactly (spaces or tabs as in the file)
+3. **INCLUDE CONTEXT**: Include surrounding code lines to make it unique
+4. **SINGLE MATCH**: Ensure the search text appears exactly ONCE in the file
+5. **CORRECT FILE**: Identify which file the code is actually in (CSS, HTML, etc.)
 
-EXAMPLES OF GOOD search text:
-- "function myFunction() {\n  return 42;\n}"
-- "const value = 'old';" (with exact spacing)
-- "import React from 'react';\n\nfunction App() {"
+## WHITESPACE CRITICAL
 
-EXAMPLES OF BAD search text (DO NOT DO THIS):
-- "\n" (just a newline - appears everywhere!)
-- "const" (too generic)
-- "}" (too generic)
-- Single characters or very short strings
+The files may use:
+- Spaces for indentation (2, 4, or more spaces)
+- Tabs for indentation
+- Different line endings (LF vs CRLF)
 
-## Important Constraints
-- DO NOT modify .github/workflows files
-- DO NOT modify .env files or environment configuration
-- DO NOT modify deployment or infrastructure files
-- DO NOT modify secret or authentication files
-- ONLY modify application source code that directly addresses the issue
+You MUST match the EXACT whitespace from the files provided above.
+
+DO:
+✅ Copy-paste the exact text including all spaces/tabs
+✅ Include multiple lines of context around the change
+✅ Verify the text appears exactly once
+✅ Check which file actually contains the code
+
+DO NOT:
+❌ Normalize whitespace
+❌ Use generic patterns
+❌ Assume file locations
+❌ Mix tabs and spaces
 
 ## Output Format
 You must respond with ONLY valid JSON (no markdown, no explanations). Use this format:
@@ -204,8 +240,8 @@ If you can provide a fix:
   "edits": [
     {
       "path": "relative/file/path",
-      "search": "EXACT unique text from the file (including whitespace and context)",
-      "replace": "EXACT replacement text with proper formatting"
+      "search": "EXACT text from file including all whitespace",
+      "replace": "EXACT replacement text preserving formatting"
     }
   ]
 }
@@ -218,10 +254,10 @@ If you cannot safely fix the issue:
 
 Remember:
 - ONLY output valid JSON. No additional text before or after.
-- Each "search" must match EXACTLY once in the file
-- Include surrounding context to ensure uniqueness
-- Preserve exact whitespace and formatting
-- Never use generic or ambiguous search patterns`;
+- Copy-paste search text directly from the provided file contents
+- Match whitespace exactly
+- Each edit's search text must appear exactly once
+- Verify the file paths are correct`;
 
   const payload = {
     model: 'gpt-5.4',
