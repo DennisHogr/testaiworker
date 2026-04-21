@@ -42,7 +42,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LANGDOCK_API_KEY: ${{ secrets.LANGDOCK_API_KEY }}
-          LANGDOCK_BASE_URL: ${{ secrets.LANGDOCK_BASE_URL }}
+          LANGDOCK_BASE_URL: ${{ vars.LANGDOCK_BASE_URL }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
