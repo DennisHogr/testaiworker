@@ -111,8 +111,7 @@ function collectRepositoryFiles(maxTotalSize = 100 * 1024) {
             relativePath.endsWith('.html') ||
             relativePath.endsWith('.css') ||
             relativePath.endsWith('.md') ||
-            relativePath === 'package.json' ||
-            relativePath === 'README.md'
+            relativePath === 'package.json'
           ) {
             try {
               const content = fs.readFileSync(fullPath, 'utf-8');
@@ -163,11 +162,30 @@ ${filesContext}
 
 ## Your Task
 Analyze the issue and provide a minimal, safe code fix. Your fix should:
-1. Address the reported problem
-2. Be the smallest necessary change
-3. Not modify workflow files, environment files, or infrastructure
-4. Include only source code changes
-5. Be testable
+1. Address the reported problem with the smallest possible change
+2. Not modify workflow files, environment files, or infrastructure
+3. Include only source code changes
+4. Be testable and self-contained
+
+## CRITICAL: Search Text Requirements
+
+IMPORTANT: The "search" field in each edit MUST:
+1. Be EXACT: Match the exact text in the file (character-for-character, including all whitespace)
+2. Be SPECIFIC: Include enough surrounding context to appear exactly ONCE in the file
+3. Be UNAMBIGUOUS: Never use generic patterns like just newlines or single characters
+4. Include CONTEXT: Include lines before/after to make it unique
+5. Be COMPLETE: Include all whitespace exactly (spaces, tabs, newlines)
+
+EXAMPLES OF GOOD search text:
+- "function myFunction() {\n  return 42;\n}"
+- "const value = 'old';" (with exact spacing)
+- "import React from 'react';\n\nfunction App() {"
+
+EXAMPLES OF BAD search text (DO NOT DO THIS):
+- "\n" (just a newline - appears everywhere!)
+- "const" (too generic)
+- "}" (too generic)
+- Single characters or very short strings
 
 ## Important Constraints
 - DO NOT modify .github/workflows files
@@ -186,8 +204,8 @@ If you can provide a fix:
   "edits": [
     {
       "path": "relative/file/path",
-      "search": "exact text to find (must match exactly, including whitespace)",
-      "replace": "exact replacement text"
+      "search": "EXACT unique text from the file (including whitespace and context)",
+      "replace": "EXACT replacement text with proper formatting"
     }
   ]
 }
@@ -198,7 +216,12 @@ If you cannot safely fix the issue:
   "reason": "Explanation of why the issue cannot be fixed safely"
 }
 
-Remember: ONLY output valid JSON. No additional text.`;
+Remember:
+- ONLY output valid JSON. No additional text before or after.
+- Each "search" must match EXACTLY once in the file
+- Include surrounding context to ensure uniqueness
+- Preserve exact whitespace and formatting
+- Never use generic or ambiguous search patterns`;
 
   const payload = {
     model: 'gpt-5.4',
@@ -328,10 +351,21 @@ function applyEdit(edit) {
   // Check that search text exists exactly once
   const occurrences = (content.match(new RegExp(edit.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
   if (occurrences === 0) {
-    throw new Error(`❌ Search text not found in ${filePath}`);
+    throw new Error(`❌ Search text not found in ${filePath}. The search text provided does not match any content in the file. This usually means:
+    1. The search text is incomplete or missing context
+    2. The file content changed since the issue was created
+    3. The file uses different whitespace (tabs vs spaces, line endings)
+
+    Search text to find: ${JSON.stringify(edit.search)}`);
   }
   if (occurrences > 1) {
-    throw new Error(`❌ Search text is ambiguous (${occurrences} matches) in ${filePath}`);
+    throw new Error(`❌ Search text is ambiguous (${occurrences} matches) in ${filePath}. The search text appears multiple times in the file. This usually means:
+    1. The search text is too generic or too short
+    2. Not enough surrounding context was included
+    3. The search text needs to include more unique identifiers
+
+    Try making the search text more specific with additional context.
+    Search text provided: ${JSON.stringify(edit.search)}`);
   }
 
   // Apply the replacement
