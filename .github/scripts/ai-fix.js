@@ -33,8 +33,12 @@ const EXCLUDE_PATTERNS = [
   /\.env/,
   /\.env\..*/,
   /\.github\/workflows/,
+  /\.github\/scripts/,
+  /\.vscode/,
   /package-lock\.json/,
   /yarn\.lock/,
+  /\.prettierignore/,
+  /\.gitignore/,
 ];
 
 // Unsafe paths that cannot be modified
